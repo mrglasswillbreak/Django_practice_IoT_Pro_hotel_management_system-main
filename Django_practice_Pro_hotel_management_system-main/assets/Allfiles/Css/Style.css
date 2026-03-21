@@ -1145,6 +1145,9 @@ Counter Part CSS
   cursor: pointer;
   position: relative;
  }
+ .Staff_info{
+  position: relative;
+ }
  .Staff_pic img{
      cursor: pointer;
     position: relative;
@@ -1153,7 +1156,8 @@ Counter Part CSS
  }
  .Staff_overly{
    position:absolute;
-   width: 100%;
+   left: 0;
+   right: 0;
    z-index:999;
    margin: -80px 0px 0px 0px;
    cursor: pointer;
