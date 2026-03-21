@@ -322,13 +322,19 @@
 
    #Service .Service_menu ul li a {
       text-decoration: none;
-      display: flex;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      column-gap: 12px;
       align-items: flex-start;
-      gap: 12px;
+   }
+
+   #Service .Service_menu ul li a h5,
+   #Service .Service_menu ul li a p {
+      grid-column: 2;
+      margin: 0;
    }
 
    #Service .Service_menu li .service-icon {
-      flex-shrink: 0;
       display: flex;
       align-items: center;
       justify-content: center;
