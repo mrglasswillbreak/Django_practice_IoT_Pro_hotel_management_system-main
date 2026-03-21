@@ -253,6 +253,11 @@ Hotel & Resort
     margin-top: 6px;
   }
 
+  /* Tighten the gap between the service image column and the text-card column */
+  #Service .row {
+    --bs-gutter-x: 0.75rem;
+  }
+
   #OUR_ROOMS .ROOMS_info {
     margin-top: 14px;
   }
@@ -543,6 +548,9 @@ Hotel & Resort
     #about .About_info {
       margin-top: 24px;
     }
+    .hero-slider-shell {
+      margin-top: -86px;
+    }
   }
 
   @media (max-width: 768px) {
@@ -602,6 +610,10 @@ Hotel & Resort
     #Service .col-lg-7,
     #Service .col-lg-5 {
       width: 100%;
+    }
+
+    .hero-slider-shell {
+      margin-top: -74px;
     }
   }
 
@@ -804,6 +816,7 @@ Hotel & Resort
   .hero-slider-shell {
     position: relative;
     z-index: 1;
+    margin-top: -100px;
   }
   .hero-slide-1 { background-image: url('{% static 'Allfiles/Photo/slider-1.jpg' %}'); }
   .hero-slide-2 { background-image: url('{% static 'Allfiles/Photo/slider-2.jpg' %}'); }
