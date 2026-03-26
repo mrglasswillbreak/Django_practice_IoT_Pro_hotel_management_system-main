@@ -706,10 +706,9 @@
 
         window.addEventListener('resize', function () {
           if (!isMobileWidth()) {
+            // When leaving mobile width, just close the mobile sidebar overlay
+            // and preserve whichever desktop nav state (nav-md or nav-sm) is active.
             closeMobileSidebar();
-            // Restore the desktop nav state that the legacy toggle may have changed
-            document.body.classList.add('nav-md');
-            document.body.classList.remove('nav-sm');
           }
         });
 
@@ -717,7 +716,10 @@
           if (!isMobileWidth()) return;
           if (!document.body.classList.contains('mobile-sidebar-open')) return;
           var target = event.target;
-          if (!target || typeof target.closest !== 'function') return;
+          if (target && target.nodeType === Node.TEXT_NODE && target.parentElement) {
+            target = target.parentElement;
+          }
+          if (!target || !(target instanceof Element)) return;
           if (target.closest('.left_col') || target.closest('#menu_toggle')) return;
           closeMobileSidebar();
         });
