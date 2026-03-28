@@ -252,13 +252,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # SECURITY: Session and cookie settings
 SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'Strict'
-SESSION_COOKIE_AGE = 60 * 60 * 8  # 8 hours (reduced from 7 days for better security)
-SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_SAMESITE = 'Lax'  # Must be 'Lax' for payment gateway redirects to work
+SESSION_COOKIE_AGE = 60 * 60 * 8  # 8 hours
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False  # Keep session for payment redirects
 
 CSRF_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_HTTPONLY = True
-CSRF_COOKIE_SAMESITE = 'Strict'
+CSRF_COOKIE_SAMESITE = 'Lax'  # Must be 'Lax' for cross-site POST forms
 
 # SECURITY: HTTP Strict Transport Security (HSTS)
 if not DEBUG:

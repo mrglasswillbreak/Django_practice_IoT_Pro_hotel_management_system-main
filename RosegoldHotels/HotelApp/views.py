@@ -1868,7 +1868,7 @@ def payment_callback(request):
         paystack = PaystackClient(secret_key=settings.PAYSTACK_SECRET_KEY)
         response = paystack.transactions.verify(reference=reference)
         
-        if response.status and response.data.status == 'success':
+        if response.status and getattr(response.data, 'status', None) == 'success':
             return finalize_pending_booking_payment(
                 request,
                 reference=reference,
@@ -1885,6 +1885,11 @@ def payment_callback(request):
             messages.error(request, "Payment verification failed. Please try again.")
             return redirect('payment_failed')
             
+    except ValueError as e:
+        # Session data lost (e.g., pending_booking not found)
+        logger.error(f"Payment callback - session data missing: {str(e)}")
+        messages.error(request, "Your session expired. Please start a new booking.")
+        return redirect('online_booking')
     except Exception as e:
         logger.error(f"Payment callback error: {str(e)}")
         messages.error(request, "An error occurred while verifying your payment.")
