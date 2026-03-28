@@ -16,6 +16,9 @@
       --lux-gold-deep: #9a7644;
       --lux-cream: #f8f4ed;
       --lux-card: #fffdf9;
+      --lux-counter-card-bg: linear-gradient(145deg, #f4dbcf 0%, #e4bea9 100%);
+      --lux-counter-card-border: rgba(154, 118, 68, 0.34);
+      --lux-counter-card-ink: #332116;
       --lux-shadow: 0 20px 45px rgba(28, 21, 12, 0.12);
       --lux-border: rgba(161, 130, 86, 0.22);
    }
@@ -211,12 +214,18 @@
    #Service .Service_img,
    #Service .Service_menu ul li,
    #GALLERY .GALLERY_info,
-   #Staff .Staff_info,
-   .counterstart .Counter_info1 {
+   #Staff .Staff_info {
       border-radius: 18px;
       border: 1px solid var(--lux-border);
       box-shadow: var(--lux-shadow);
       background: var(--lux-card);
+   }
+
+   .counterstart .Counter_info1 {
+      border-radius: 18px;
+      border: 1px solid var(--lux-counter-card-border);
+      box-shadow: var(--lux-shadow);
+      background: var(--lux-counter-card-bg);
    }
 
    #about .about_video img,
@@ -427,12 +436,15 @@
    }
 
    .counterstart .counter_heading h2,
-   .counterstart .counter_heading p,
+   .counterstart .counter_heading p {
+      color: #f5ece1;
+   }
+
    .counterstart .Counter_info1,
    .counterstart .Counter_info1 p,
    .counterstart .Counter_info1 h2,
    .counterstart .Counter_info1 span {
-      color: #f5ece1;
+      color: var(--lux-counter-card-ink);
    }
 
    /* Overlay: slides up from below card on hover / click */
@@ -792,6 +804,9 @@
       --lux-gold: var(--accent);
       --lux-gold-deep: #f0ca86;
       --lux-card: var(--surface);
+      --lux-counter-card-bg: var(--surface);
+      --lux-counter-card-border: var(--outline);
+      --lux-counter-card-ink: #f5ece1;
       --lux-shadow: 0 18px 36px rgba(5, 9, 14, 0.45);
       --lux-border: var(--outline);
    }
