@@ -137,6 +137,17 @@ class LoginRoutingTests(TestCase):
         self.assertNotContains(response, "evil.com")
 
 
+@override_settings(ALLOWED_HOSTS=["testserver", "localhost", "127.0.0.1"])
+class MediaServingTests(TestCase):
+    def test_room_images_are_served_when_debug_is_disabled(self):
+        self.assertFalse(settings.DEBUG)
+
+        response = self.client.get("/media/rooms/single1.jpg", secure=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/jpeg")
+
+
 @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
 class RegistrationConfirmationTests(TestCase):
     def test_registration_creates_inactive_user_and_sends_confirmation_email(self):

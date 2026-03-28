@@ -1,28 +1,43 @@
-"""HotelManagementSystem URL Configuration
+"""HotelManagementSystem URL Configuration."""
 
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/3.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
+import re
+from urllib.parse import urlsplit
+
 from django.contrib import admin
-from django.urls import path,include
-from django.conf.urls.static import static
 from django.conf import settings
+from django.urls import include, path, re_path
+from django.views.static import serve
+
+
+def media_urlpatterns():
+    """Serve local media files even when DEBUG is disabled."""
+    media_url = getattr(settings, "MEDIA_URL", "")
+    if not media_url:
+        return []
+
+    parsed_media_url = urlsplit(media_url)
+    if parsed_media_url.scheme or parsed_media_url.netloc:
+        return []
+
+    media_prefix = media_url.lstrip("/")
+    if not media_prefix:
+        return []
+    if not media_prefix.endswith("/"):
+        media_prefix = f"{media_prefix}/"
+
+    return [
+        re_path(
+            rf"^{re.escape(media_prefix)}(?P<path>.*)$",
+            serve,
+            {"document_root": settings.MEDIA_ROOT},
+        )
+    ]
+
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('HotelApp.urls')),
     path('', include('alerts.urls')),
+]
 
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-if settings.DEBUG:
-        urlpatterns += static(settings.MEDIA_URL,
-                              document_root=settings.MEDIA_ROOT)
+urlpatterns += media_urlpatterns()
