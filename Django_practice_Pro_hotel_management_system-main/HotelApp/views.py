@@ -10,14 +10,17 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
+from django.core.mail import EmailMultiAlternatives
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import TruncMonth
 from django.db.utils import OperationalError, ProgrammingError
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render, redirect, get_object_or_404
+from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils.encoding import force_bytes, force_str
 from django.utils import timezone
-from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST, require_http_methods
 
@@ -38,6 +41,7 @@ from .models import (
 from .forms import (
     AdminUserCreateForm,
     AdminUserUpdateForm,
+    AuthorRegisterForm,
     OnlineBookingForm,
     OfflineBookingForm,
     EmployeeForm,
@@ -45,6 +49,7 @@ from .forms import (
     SalaryForm,
     booking_window_has_conflict,
 )
+from .tokens import account_activation_token
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +78,40 @@ def get_safe_next_url(request):
 def get_post_login_redirect(request, user):
     next_url = get_safe_next_url(request)
     return next_url or reverse(get_post_login_route_name(user))
+
+
+def build_account_activation_url(request, user):
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    token = account_activation_token.make_token(user)
+    return request.build_absolute_uri(reverse("activate_account", args=[uid, token]))
+
+
+def email_requires_manual_confirmation():
+    return settings.EMAIL_BACKEND in {
+        "django.core.mail.backends.console.EmailBackend",
+        "django.core.mail.backends.filebased.EmailBackend",
+        "django.core.mail.backends.dummy.EmailBackend",
+    }
+
+
+def send_account_activation_email(request, user):
+    activation_url = build_account_activation_url(request, user)
+    context = {
+        "user": user,
+        "activation_url": activation_url,
+    }
+    subject = "Confirm your RoseGold Hotel account"
+    text_body = render_to_string("emails/account_activation.txt", context)
+    html_body = render_to_string("emails/account_activation.html", context)
+
+    message = EmailMultiAlternatives(
+        subject=subject,
+        body=text_body,
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        to=[user.email],
+    )
+    message.attach_alternative(html_body, "text/html")
+    return message.send(fail_silently=False)
 
 
 def admin_required(view_func):
@@ -282,35 +321,95 @@ def user_home(request):
     })
 
 def author_register(request):
+    if request.user.is_authenticated:
+        return redirect(get_post_login_redirect(request, request.user))
+
+    form = AuthorRegisterForm(request.POST or None)
+
     if request.method == "POST":
-        first_name = request.POST.get("first_name")  # match your form fields
-        last_name = request.POST.get("last_name")
-        email = request.POST.get("email")
-        phone = request.POST.get("phone_number")
-        password1 = request.POST.get("password1")
-        password2 = request.POST.get("password2")
+        if form.is_valid():
+            user = form.save()
+            activation_url = build_account_activation_url(request, user)
 
-        if password1 != password2:
-            messages.error(request, "Passwords do not match.")
-            return redirect("author_register")
+            request.session["pending_activation_email"] = user.email
+            request.session["pending_activation_url"] = activation_url
 
-        if Authorregis.objects.filter(email=email).exists():
-            messages.error(request, "Email already registered.")
-            return redirect("author_register")
+            if email_requires_manual_confirmation():
+                messages.info(
+                    request,
+                    "Email delivery is not configured in this environment, so confirm your account using the secure link on the next page.",
+                )
+                return redirect("registration_pending")
 
-        user = Authorregis.objects.create_user(
-            email=email,
-            password=password1,
-            first_name=first_name,
-            last_name=last_name
-        )
-        user.phone_number = phone
-        user.save()
+            try:
+                sent_count = send_account_activation_email(request, user)
+            except Exception:
+                logger.exception("Failed to send activation email for %s", user.email)
+                user.delete()
+                request.session.pop("pending_activation_email", None)
+                request.session.pop("pending_activation_url", None)
+                messages.error(
+                    request,
+                    "We could not send your confirmation email right now. Please try registering again in a moment.",
+                )
+            else:
+                if sent_count != 1:
+                    logger.error("Activation email backend returned %s for %s", sent_count, user.email)
+                    user.delete()
+                    request.session.pop("pending_activation_email", None)
+                    request.session.pop("pending_activation_url", None)
+                    messages.error(
+                        request,
+                        "We could not send your confirmation email right now. Please try registering again in a moment.",
+                    )
+                else:
+                    return redirect("registration_pending")
+        else:
+            messages.error(request, "Please correct the highlighted registration errors and try again.")
 
-        messages.success(request, "Registration successful!")
+    return render(request, "author_register.html", {"form": form})
+
+
+def registration_pending(request):
+    email = request.session.get("pending_activation_email")
+    activation_url = request.session.get("pending_activation_url")
+
+    if not email:
         return redirect("author_login")
 
-    return render(request, "author_register.html")
+    return render(
+        request,
+        "registration_pending.html",
+        {
+            "pending_email": email,
+            "activation_url": activation_url if email_requires_manual_confirmation() else "",
+            "manual_confirmation_required": email_requires_manual_confirmation(),
+        },
+    )
+
+
+def activate_account(request, uidb64, token):
+    user = None
+
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = Authorregis.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, Authorregis.DoesNotExist):
+        user = None
+
+    if user and user.is_active:
+        messages.info(request, "Your email is already confirmed. You can sign in.")
+    elif user and account_activation_token.check_token(user, token):
+        user.is_active = True
+        user.save(update_fields=["is_active"])
+        if request.session.get("pending_activation_email") == user.email:
+            request.session.pop("pending_activation_email", None)
+            request.session.pop("pending_activation_url", None)
+        messages.success(request, "Your email has been confirmed. You can now sign in.")
+    else:
+        messages.error(request, "This confirmation link is invalid or has expired.")
+
+    return redirect("author_login")
 
 def author_login(request):
     if request.user.is_authenticated:
@@ -330,7 +429,11 @@ def author_login(request):
             messages.success(request, "Login successful!")
             return redirect(get_post_login_redirect(request, user))
         else:
-            messages.error(request, "Invalid credentials.")
+            pending_user = Authorregis.objects.filter(email__iexact=email).first()
+            if pending_user and password and pending_user.check_password(password) and not pending_user.is_active:
+                messages.warning(request, "Please confirm your email before signing in.")
+            else:
+                messages.error(request, "Invalid credentials.")
 
     return render(request, "author_login.html", {"next": get_safe_next_url(request)})
 

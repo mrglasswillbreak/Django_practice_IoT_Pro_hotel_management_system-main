@@ -17,6 +17,8 @@ urlpatterns = [
     path('login/', views.author_login, name='author_login'),
     path('logout/', views.author_logout, name='auth_logout'),
     path('register/', views.author_register, name='author_register'),
+    path('register/pending/', views.registration_pending, name='registration_pending'),
+    path('register/confirm/<uidb64>/<token>/', views.activate_account, name='activate_account'),
     path('forgotpassword/', views.author_forgot_password, name='author_forgot_password'),
 
     # ONLINE BOOKING

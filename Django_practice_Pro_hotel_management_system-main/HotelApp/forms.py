@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
+from django.core.validators import validate_email as django_validate_email
 
 from . import models
 from .models import Authorregis
@@ -255,6 +256,52 @@ class AdminUserUpdateForm(StyledFormMixin, forms.ModelForm):
 
 
 class AuthorRegisterForm(StyledFormMixin, UserCreationForm):
+    accept_terms = forms.BooleanField(
+        label="I agree to the Terms & Conditions",
+        required=True,
+        error_messages={
+            "required": "You must accept the Terms & Conditions to register.",
+        },
+    )
+
     class Meta:
         model = Authorregis
-        fields = ["email", "first_name", "last_name", "phone_number"]
+        fields = ["first_name", "last_name", "email", "phone_number"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields["first_name"].label = "First Name"
+        self.fields["last_name"].label = "Last Name"
+        self.fields["phone_number"].label = "Phone Number"
+        self.fields["email"].label = "Email"
+
+        for field_name in ["first_name", "last_name", "phone_number", "email"]:
+            self.fields[field_name].required = True
+
+        self.fields["first_name"].widget.attrs["placeholder"] = "First Name *"
+        self.fields["last_name"].widget.attrs["placeholder"] = "Last Name *"
+        self.fields["email"].widget.attrs["placeholder"] = "Email *"
+        self.fields["phone_number"].widget.attrs["placeholder"] = "Phone Number *"
+        self.fields["password1"].widget.attrs["placeholder"] = "Password *"
+        self.fields["password2"].widget.attrs["placeholder"] = "Confirm Password *"
+
+        self.fields["accept_terms"].widget.attrs["class"] = "form-check-input"
+        self.fields["accept_terms"].widget.attrs["id"] = "terms"
+
+    def clean_email(self):
+        email = self.cleaned_data.get("email", "").strip().lower()
+        django_validate_email(email)
+
+        if Authorregis.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError("Email already registered.")
+
+        return email
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        user.email = self.cleaned_data["email"]
+        user.is_active = False
+        if commit:
+            user.save()
+        return user

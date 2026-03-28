@@ -2,14 +2,18 @@ from unittest.mock import patch
 from pathlib import Path
 from datetime import date
 
-from django.test import TestCase
+from django.core import mail
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.db.utils import OperationalError, ProgrammingError
 from django.contrib.auth import get_user_model
 from django.conf import settings
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 
 from .models import Room, OnlineBooking, OfflineBooking
 from .room_seed import seed_missing_rooms
+from .tokens import account_activation_token
 
 
 class HomeViewTests(TestCase):
@@ -131,6 +135,108 @@ class LoginRoutingTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "evil.com")
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class RegistrationConfirmationTests(TestCase):
+    def test_registration_creates_inactive_user_and_sends_confirmation_email(self):
+        response = self.client.post(
+            reverse("author_register"),
+            data={
+                "first_name": "Ada",
+                "last_name": "Guest",
+                "email": "ada@example.com",
+                "phone_number": "08001234567",
+                "password1": "ComplexPass123!",
+                "password2": "ComplexPass123!",
+                "accept_terms": "on",
+            },
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("registration_pending"))
+        user = get_user_model().objects.get(email="ada@example.com")
+        self.assertFalse(user.is_active)
+        self.assertContains(response, "We sent a confirmation email to your inbox.")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ["ada@example.com"])
+        self.assertIn("Confirm your RoseGold Hotel account", mail.outbox[0].subject)
+        self.assertIn("/register/confirm/", mail.outbox[0].body)
+
+    def test_registration_rejects_invalid_email_addresses(self):
+        response = self.client.post(
+            reverse("author_register"),
+            data={
+                "first_name": "Ada",
+                "last_name": "Guest",
+                "email": "not-an-email",
+                "phone_number": "08001234567",
+                "password1": "ComplexPass123!",
+                "password2": "ComplexPass123!",
+                "accept_terms": "on",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Enter a valid email address.")
+        self.assertFalse(get_user_model().objects.filter(email="not-an-email").exists())
+
+    def test_activation_link_marks_user_active(self):
+        user = get_user_model().objects.create_user(
+            email="pending@example.com",
+            password="GuestPass123!",
+            is_active=False,
+        )
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = account_activation_token.make_token(user)
+
+        response = self.client.get(reverse("activate_account", args=[uid, token]), follow=True)
+
+        self.assertRedirects(response, reverse("author_login"))
+        user.refresh_from_db()
+        self.assertTrue(user.is_active)
+        self.assertContains(response, "Your email has been confirmed. You can now sign in.")
+
+    def test_login_shows_confirmation_message_for_inactive_users(self):
+        inactive_user = get_user_model().objects.create_user(
+            email="inactive@example.com",
+            password="GuestPass123!",
+            is_active=False,
+        )
+
+        response = self.client.post(
+            reverse("author_login"),
+            data={
+                "username": inactive_user.email,
+                "password": "GuestPass123!",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Please confirm your email before signing in.")
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.console.EmailBackend")
+class RegistrationPendingFallbackTests(TestCase):
+    def test_registration_shows_activation_link_when_email_delivery_is_not_configured(self):
+        response = self.client.post(
+            reverse("author_register"),
+            data={
+                "first_name": "Local",
+                "last_name": "Tester",
+                "email": "localtester@example.com",
+                "phone_number": "08001234567",
+                "password1": "ComplexPass123!",
+                "password2": "ComplexPass123!",
+                "accept_terms": "on",
+            },
+            follow=True,
+        )
+
+        self.assertRedirects(response, reverse("registration_pending"))
+        self.assertContains(response, "This environment is not configured to deliver real emails yet")
+        self.assertContains(response, "/register/confirm/")
+        self.assertFalse(get_user_model().objects.get(email="localtester@example.com").is_active)
 
 
 class AdminAccessControlTests(TestCase):
