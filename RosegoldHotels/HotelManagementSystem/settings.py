@@ -375,6 +375,7 @@ PAYSTACK_SECRET_KEY = os.environ.get('PAYSTACK_SECRET_KEY', '')
 PAYSTACK_WEBHOOK_SECRET = os.environ.get('PAYSTACK_WEBHOOK_SECRET', '')
 PAYSTACK_API_BASE_URL = os.environ.get('PAYSTACK_API_BASE_URL', 'https://api.paystack.co')
 PAYSTACK_CURRENCY = os.environ.get('PAYSTACK_CURRENCY', 'NGN')
+PAYSTACK_USER_AGENT = os.environ.get('PAYSTACK_USER_AGENT', 'RoseGoldHotels/1.0 (+https://rosegoldhotel.local)')
 PAYSTACK_MOCK_MODE = env_bool('PAYSTACK_MOCK_MODE', DEBUG and not PAYSTACK_SECRET_KEY)
 
 # Development warning for missing payment keys

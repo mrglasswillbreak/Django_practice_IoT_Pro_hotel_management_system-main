@@ -1,6 +1,7 @@
 from unittest.mock import patch
 from pathlib import Path
 from datetime import date
+from decimal import Decimal
 
 from django.core import mail
 from django.test import TestCase, override_settings
@@ -12,6 +13,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from .models import Room, OnlineBooking, OfflineBooking
+from .paystack import initialize_transaction
 from .room_seed import seed_missing_rooms
 from .tokens import account_activation_token
 
@@ -737,6 +739,29 @@ class PaystackPaymentTests(TestCase):
         self.assertRedirects(response, reverse("booking_payment_page"))
         self.assertContains(response, "Payment gateway is not configured on this deployment.")
 
+    @override_settings(PAYSTACK_MOCK_MODE=False, PAYSTACK_SECRET_KEY="sk_test_demo", PAYSTACK_PUBLIC_KEY="pk_test_demo")
+    def test_initiate_payment_shows_cloudflare_specific_message(self):
+        session = self.client.session
+        session["pending_booking"] = self._pending_booking_session()
+        session.save()
+
+        init_resp = self._make_init_response(status=False)
+        init_resp.raw = {
+            "status": False,
+            "message": (
+                '{"status":403,"error_code":1010,"error_name":"browser_signature_banned",'
+                '"cloudflare_error":true,"ray_id":"9e3a1ccbaab15ec6"}'
+            ),
+        }
+
+        with patch("HotelApp.views.PaystackClient") as MockClient:
+            MockClient.return_value.transactions.initialize.return_value = init_resp
+            response = self.client.post(reverse("initiate_payment"), follow=True)
+
+        self.assertRedirects(response, reverse("booking_payment_page"))
+        self.assertContains(response, "Cloudflare (Error 1010)")
+        self.assertContains(response, "9e3a1ccbaab15ec6")
+
     # --- payment_callback ---
 
     def test_payment_callback_creates_booking_and_marks_payment_paid_on_success(self):
@@ -819,3 +844,34 @@ class SharedLayoutResponsiveTests(TestCase):
         self.assertIn('class="nav-md admin-modern"', template_content)
         self.assertIn("function wrapTablesForMobile()", template_content)
         self.assertIn("wrapper.className = 'table-responsive';", template_content)
+
+
+class PaystackTransportTests(TestCase):
+    @override_settings(PAYSTACK_SECRET_KEY="sk_test_demo", PAYSTACK_USER_AGENT="RoseGoldHotels/1.0")
+    def test_initialize_transaction_sends_custom_user_agent(self):
+        captured = {}
+
+        class DummyResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return b'{"status": true, "data": {"authorization_url": "https://checkout.paystack.com/test"}}'
+
+        def fake_urlopen(request, timeout=20):
+            captured["user_agent"] = request.get_header("User-agent")
+            return DummyResponse()
+
+        with patch("HotelApp.paystack.urlopen", side_effect=fake_urlopen):
+            initialize_transaction(
+                email="guest@example.com",
+                amount=Decimal("100.00"),
+                reference="HMS-USERAGENT1",
+                callback_url="https://example.com/callback",
+                secret_key="sk_test_demo",
+            )
+
+        self.assertEqual(captured["user_agent"], "RoseGoldHotels/1.0")

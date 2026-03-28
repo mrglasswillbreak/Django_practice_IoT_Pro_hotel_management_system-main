@@ -86,6 +86,7 @@ def _paystack_request(
     headers = {
         "Authorization": f"Bearer {resolved_secret_key}",
         "Accept": "application/json",
+        "User-Agent": settings.PAYSTACK_USER_AGENT,
     }
 
     if payload is not None:

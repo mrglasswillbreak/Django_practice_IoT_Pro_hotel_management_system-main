@@ -1628,6 +1628,22 @@ def get_paystack_initialization_error_message(response=None):
     if isinstance(raw, dict):
         message = raw.get("message")
         if message:
+            if isinstance(message, str):
+                try:
+                    parsed_message = json.loads(message)
+                except json.JSONDecodeError:
+                    parsed_message = None
+            else:
+                parsed_message = message
+
+            if isinstance(parsed_message, dict) and parsed_message.get("cloudflare_error"):
+                ray_id = parsed_message.get("ray_id", "unknown")
+                return (
+                    "Paystack blocked this server through Cloudflare (Error 1010). "
+                    f"This is not a free-account limit. Please contact Paystack support and share Ray ID {ray_id}. "
+                    "If you manage the deployment, also confirm the server uses a normal User-Agent and matching live/test keys."
+                )
+
             return f"Paystack could not start this payment: {message}"
 
     return "We could not start the payment gateway. Please try again."
